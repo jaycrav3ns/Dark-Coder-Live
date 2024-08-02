@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Real-time HTML Editor</title>
+  <link rel="icon" href="data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2230%22%20height%3D%2230%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22white%22%20stroke-width%3D%222.5%22%20stroke-linecap%3D%22square%22%20stroke-linejoin%3D%22arcs%22%3E%3Cpolyline%20points%3D%2216%2018%2022%2012%2016%206%22%3E%3C%2Fpolyline%3E%3Cpolyline%20points%3D%228%206%202%2012%208%2018%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E%0A">
+  <script src="./ace.js"></script>
+  <style>
+    body, html {
+      font-family: Arial, Helvetica, sans-serif;
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    #controls {
+      display: flex;
+      justify-content: space;
+      align-items: center;
+      padding: 10px;
+      background-color: #111;
+      border-bottom: 1px double grey;
+    }
+    .main-container {
+      display: flex;
+      height: calc(100% - 45px);
+      overflow: hidden;
+    }
+    #editor {
+      flex: 1;
+      overflow: auto;
+      background-color: #111;
+      color: #f8f8f2;
+    }
+    .resizer {
+      width: 5px;
+      cursor: ew-resize;
+      background-color: #888;
+      z-index: 2;
+    }
+    #preview {
+      flex: 1;
+      border: none;
+      background: white;
+    }
+    .ace_gutter {
+      background-color: #282a36;
+      color: #6272a4;
+    }
+    .ace_active-line {
+      background-color: #44475a;
+    }
+    .ace_cursor {
+      color: #f8f8f2;
+    }
+    .ace_selection {
+      background-color: #44475a;
+    }
+    .dropdown {
+      background-color: #111;
+      color: lightgrey;
+      border: 1px solid grey;
+      border-radius: 5px;
+      margin-left: 3%;
+      margin-right: 1%;
+    }
+    .filefunction {
+      color: lightgrey;
+      text-decoration: none;
+      margin-left: 20px;
+    }
+    .filefunction:hover {
+      color: orangered;
+      text-decoration: none;
+    }
+    .checkstyle {
+      color: lime;
+    }
+    a {
+      color: lightgrey;
+      text-decoration: none;
+    }
+    a:hover {
+      color: orangered;
+      text-decoration: none;
+    }
+    .spacer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 43px;
+      height: 47px;
+      transition: background-color 0.3s ease, background-image 0.3s ease;
+    }
+    .spacer.vibrant-ink {
+      background-color: #1a1a1a;
+      background-image: linear-gradient(to bottom, #111, #1a1a1a);
+    }
+    .spacer.cloud9-night {
+      background-color: #303130;
+      background-image: linear-gradient(to bottom, #111, #303130);
+    }
+    .spacer.cloud-editor-dark {
+      background-color: #282c34;
+      background-image: linear-gradient(to bottom, #111, #282c34);
+    }
+    .spacer.clouds-midnight {
+      background-color: #232323;
+      background-image: linear-gradient(to bottom, #111, #232323);
+    }
+    .spacer.dracula {
+      background-color: #282a36;
+      background-image: linear-gradient(to bottom, #111, #282a36);
+    }
+    .spacer.github-dark {
+      background-color: #24292e;
+      background-image: linear-gradient(to bottom, #111, #24292e);
+    }
+    .spacer.tomorrow-night {
+      background-color: #25282c;
+      background-image: linear-gradient(to bottom, #111, #25282c);
+    }
+    input[type="checkbox"] {
+      margin-left: 10px;
+    }
+    .container {
+      display: inline-block;
+      position: relative;
+      margin-right: 10px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .container input {
+      position: relative;
+      opacity: 0;
+      cursor: pointer;
+    }
+    .checkmark {
+      position: absolute;
+      top: 0;
+      left: 0;
+      height: 18px;
+      width: 18px;
+      background-color: #000;
+      border: solid 1px gray;
+      border-radius: 0.3rem;
+    }
+    .container:hover input ~ .checkmark {
+      background-color: gray;
+      border: solid 1px lightgray;
+    }
+    .container input:checked ~ .checkmark {
+      background-color: #333;
+    }
+    .checkmark:after {
+      content: "";
+      position: absolute;
+      display: none;
+    }
+    .container input:checked ~ .checkmark:after {
+      display: block;
+    }
+    .checkmark:after {
+      top: 2px;
+      left: 6px;
+      width: 4px;
+      height: 10px;
+      color: #000;
+      border: solid white;
+      border-width: 0 2px 2px 0;
+      transform: rotate(45deg);
+    }
+    .container .check-label {
+      position: relative;
+      color: lightgray;
+      font-size: 11pt;
+    }
+    #font-size-selector {
+      position: relative;
+      background-color: #111;
+      color: lightgrey;
+      border: 1px solid grey;
+      border-radius: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div id="controls">
+    <div id="spacer" class="spacer vibrant-ink"></div>
+    <select id="mode-selector" class="dropdown">
+      <option value="ace/mode/html">HTML</option>
+      <option value="ace/mode/css">CSS</option>
+      <option value="ace/mode/javascript">JS</option>
+      <option value="ace/mode/php">PHP</option>
+      <option value="ace/mode/json">JSON</option>
+    </select>
+    <select id="font-size-selector" style="margin-right:2%">
+      <option value="12">12px</option>
+      <option value="14">14px</option>
+      <option value="16">16px</option>
+      <option value="18">18px</option>
+      <option value="20">20px</option>
+    </select>
+    <input type="file" id="htmlimport" style="display: none;" />
+    <a href="#" onclick="importFile()" title="Import" class="filefunction">
+      <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" stroke-linejoin="arcs" stroke-linecap="square" stroke-width="2.5" stroke="currentColor" fill="none">
+        <g><title>Layer 1</title>
+        <path id="svg_1" d="m10.83333,22.16667l-7,0a2,2 0 0 1 -2,-2l0,-14c0,-1.1 0.9,-2 2,-2l5,0l2,3l9,0a2,2 0 0 1 2,2l0,2m-3,5l0,6m-3,-3l6,0"/>
+        </g>
+      </svg>
+    </a>
+    <a href="#" onclick="exportFile()" title="Export" class="filefunction">
+      <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" stroke-linejoin="arcs" stroke-linecap="square" stroke-width="2.5" stroke="currentColor" fill="none">
+        <g><title>Layer 1</title>
+        <path id="svg_1" d="m3,16.12501l0,4c0,1.1 0.9,2 2,2l14,0a2,2 0 0 0 2,-2l0,-4m-4,-6l-5,5l-5,-5m5,3.8l0,-10.3"/>
+        </g>
+      </svg>
+    </a>
+    <a href="#" onclick="textToClipboard()" title="Copy Text" class="filefunction">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square" stroke-linejoin="arcs">
+        <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+        <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+      </svg>
+    </a>
+    <a href="#" onclick="beautifyCode()" title="Beautify Code" class="filefunction">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square" stroke-linejoin="arcs">
+        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+        <polyline points="7.5 4.21 12 6.81 16.5 4.21"></polyline>
+        <polyline points="7.5 19.79 7.5 14.6 3 12"></polyline>
+        <polyline points="21 12 16.5 14.6 16.5 19.79"></polyline>
+        <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+        <line x1="12" y1="22.08" x2="12" y2="12"></line>
+      </svg>
+    </a>
+    <span class="checkstyle" id="copiedMessage"></span>
+    <select id="theme-selector" class="dropdown">
+      <option value="ace/theme/cloud9_night" data-theme="cloud9-night">Cloud9 Night</option>
+      <option value="ace/theme/cloud_editor_dark" data-theme="cloud-editor-dark">CE Dark</option>
+      <option value="ace/theme/clouds_midnight" data-theme="clouds-midnight">Clouds Midnight</option>
+      <option value="ace/theme/dracula" data-theme="dracula">Dracula</option>
+      <option value="ace/theme/github_dark" data-theme="github-dark">Github Dark</option>
+      <option value="ace/theme/tomorrow_night" data-theme="tomorrow-night">Tomorrow Night</option>
+      <option value="ace/theme/vibrant_ink" data-theme="vibrant-ink">Vibrant Ink</option>
+    </select>
+    <label class="container">
+      <input type="checkbox" id="word-wrap-checkbox" />
+      <span class="checkmark"></span>
+      <span class="check-label">Wrap</span>
+    </label>
+  </div>
+  <div class="main-container">
+    <div id="editor"></div>
+    <div class="resizer" id="dragDivider"></div>
+    <iframe id="preview"></iframe>
+  </div>
+
+  <script>
+    window.onload = function() {
+      var editor = ace.edit("editor");
+      editor.setTheme("ace/theme/vibrant_ink");
+      editor.session.setMode("ace/mode/html");
+      editor.setOptions({
+        fontSize: "16px",
+        enableBasicAutocompletion: true,
+        enableSnippets: true,
+        enableLiveAutocompletion: true
+      });
+
+      // Disable auto-closing brackets
+      editor.setBehavioursEnabled(false);
+
+      // Initialize word wrap based on checkbox state
+      const wordWrapCheckbox = document.getElementById('word-wrap-checkbox');
+      editor.session.setUseWrapMode(wordWrapCheckbox.checked);
+
+      // Add event listener for word wrap checkbox
+      wordWrapCheckbox.addEventListener('change', function() {
+        editor.session.setUseWrapMode(this.checked);
+      });
+
+      // Font size selector
+      document.getElementById('font-size-selector').addEventListener('change', function(e) {
+        editor.setFontSize(e.target.value + "px");
+      });
+
+      // Theme selector
+      document.getElementById('theme-selector').addEventListener('change', function(e) {
+        const selectedOption = e.target.options[e.target.selectedIndex];
+        const theme = selectedOption.getAttribute('data-theme');
+        changeTheme(theme);
+        editor.setTheme(e.target.value);
+      });
+
+      function changeTheme(theme) {
+        const spacer = document.getElementById('spacer');
+        spacer.className = 'spacer ' + theme;
+      }
+
+      // Initial theme (Vibrant Ink is default)
+      changeTheme('vibrant-ink');
+
+      // Mode selector
+      document.getElementById('mode-selector').addEventListener('change', function(e) {
+        editor.session.setMode(e.target.value);
+      });
+
+      // Beautify function
+      window.beautifyCode = function() {
+        var beautify = ace.require("ace/ext/beautify");
+        beautify.beautify(editor.session);
+      };
+
+      var defaultStuff = '<style>body{background-color:#222;color:#fff;margin:3%}</style>\n' +
+        '<h3>Real-time HTML Editor!</h3>\n' +
+        '<p style="color:#ffbf00">Live updating preview. Changes will be immediately rendered.</p>\n' +
+        '<!-- HTML comment -->';
+
+      editor.setValue(defaultStuff);
+      editor.clearSelection();
+
+      updatePreview();
+
+      editor.session.on('change', updatePreview);
+
+      function updatePreview() {
+        var code = editor.getValue();
+        document.getElementById("preview").srcdoc = code;
+      }
+
+      // Make sure the editor is visible
+      editor.resize();
+
+      // Resizable panels
+      const resizer = document.getElementById('dragDivider');
+      const leftSide = resizer.previousElementSibling;
+      const rightSide = resizer.nextElementSibling;
+
+      let x = 0;
+      let y = 0;
+      let leftWidth = 0;
+
+      const mouseDownHandler = function (e) {
+        x = e.clientX;
+        y = e.clientY;
+        leftWidth = leftSide.getBoundingClientRect().width;
+
+        document.addEventListener('mousemove', mouseMoveHandler);
+        document.addEventListener('mouseup', mouseUpHandler);
+      };
+
+      const mouseMoveHandler = function (e) {
+        const dx = e.clientX - x;
+        const newLeftWidth = ((leftWidth + dx) * 100) / resizer.parentNode.getBoundingClientRect().width;
+        leftSide.style.flex = `0 0 ${newLeftWidth}%`;
+
+        document.body.style.cursor = 'col-resize';
+        leftSide.style.userSelect = 'none';
+        leftSide.style.pointerEvents = 'none';
+        rightSide.style.userSelect = 'none';
+        rightSide.style.pointerEvents = 'none';
+
+        editor.resize();
+      };
+
+      const mouseUpHandler = function () {
+        document.body.style.removeProperty('cursor');
+        leftSide.style.removeProperty('user-select');
+        leftSide.style.removeProperty('pointer-events');
+        rightSide.style.removeProperty('user-select');
+        rightSide.style.removeProperty('pointer-events');
+
+        document.removeEventListener('mousemove', mouseMoveHandler);
+        document.removeEventListener('mouseup', mouseUpHandler);
+
+        editor.resize();
+      };
+
+      resizer.addEventListener('mousedown', mouseDownHandler);
+    };
+
+		// File functions
+    window.importFile = function() {
+      var input = document.getElementById('htmlimport');
+      input.click(); 
+      input.onchange = function() {
+        var file = input.files[0];
+        var reader = new FileReader();
+
+        reader.onload = function(event) {
+          editor.setValue(event.target.result);
+          editor.clearSelection();
+        };
+
+        reader.readAsText(file);
+      };
+    }
+
+    window.exportFile = function() {
+      var content = editor.getValue();
+      var blob = new Blob([content], { type: 'text/html' });
+      var url = URL.createObjectURL(blob);
+
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'html-export.html';
+      a.click();
+
+      URL.revokeObjectURL(url);
+    }
+
+    window.textToClipboard = function() {
+      var content = editor.getValue();
+      var tempTextArea = document.createElement('textarea');
+      tempTextArea.value = content;
+      document.body.appendChild(tempTextArea);
+      tempTextArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(tempTextArea);
+
+      const copiedMessage = document.getElementById('copiedMessage');
+      copiedMessage.textContent = '✔';
+
+      setTimeout(() => {
+        copiedMessage.textContent = '';
+      }, 2000);
+    }
+  </script>
+	<!-- Extensions -->
+  <script src="./lib/ext-beautify.js"></script>
+  <script src="./lib/ext-language_tools.js"></script>
+	<!-- Editor Themes -->
+  <script src="./lib/theme-cloud_editor_dark.js"></script>
+  <script src="./lib/theme-cloud9_night.js"></script>
+  <script src="./lib/theme-clouds_midnight.js"></script>
+  <script src="./lib/theme-dracula.js"></script>
+  <script src="./lib/theme-github_dark.js"></script>
+  <script src="./lib/theme-tomorrow_night.js"></script>
+  <script src="./lib/theme-vibrant_ink.js"></script>
+	<!-- Syntax Colors -->
+  <script src="./lib/mode-html.js"></script>
+  <script src="./lib/mode-css.js"></script>
+  <script src="./lib/mode-javascript.js"></script>
+  <script src="./lib/mode-php.js"></script>
+  <script src="./lib/mode-json.js"></script>
+</body>
+</html>
